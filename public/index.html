@@ -304,6 +304,7 @@ body{background:var(--bg);color:var(--ink);font-family:'Outfit',sans-serif;min-h
 //  CONFIG
 // ─────────────────────────────────────
 const PROXY = window.location.origin; // Funciona en local Y en Railway automáticamente // servidor local Node.js
+const SEPA_TIMEOUT = 5000; // 5 seg maximo para SEPA
 const SEPA_BASE = 'https://d3e6htiiul5ek9.cloudfront.net/prod';
 const GEOREF = 'https://apis.datos.gob.ar/georef/api';
 
@@ -434,6 +435,8 @@ async function doSearch() {
 // ─────────────────────────────────────
 async function fetchFromSEPA(query, coords) {
   setStep(2);
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 5000); 
 
   // 1. Obtener sucursales cercanas via proxy
   const sucRes = await fetchWithTimeout(
