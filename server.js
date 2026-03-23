@@ -22,13 +22,26 @@ app.get('/health', function(req, res) {
   res.json({ status: 'ok' });
 });
 
+async function fetchSEPA(url, timeoutMs) {
+  const controller = new AbortController();
+  const timer = setTimeout(function() { controller.abort(); }, timeoutMs);
+  try {
+    const r = await fetch(url, { headers: HEADERS, signal: controller.signal });
+    clearTimeout(timer);
+    return r;
+  } catch(e) {
+    clearTimeout(timer);
+    throw e;
+  }
+}
+
 app.get('/api/sucursales', async function(req, res) {
   const lat = req.query.lat;
   const lng = req.query.lng;
-  const limit = req.query.limit || 30;
+  const limit = req.query.limit || 20;
   if (!lat || !lng) return res.status(400).json({ error: 'Faltan lat y lng' });
   try {
-    const r = await fetch(SEPA + '/sucursales?lat=' + lat + '&lng=' + lng + '&limit=' + limit, { headers: HEADERS });
+    const r = await fetchSEPA(SEPA + '/sucursales?lat=' + lat + '&lng=' + lng + '&limit=' + limit, 8000);
     if (!r.ok) throw new Error('SEPA ' + r.status);
     const data = await r.json();
     const sucursales = (data.sucursales || []).map(function(s) {
@@ -45,7 +58,7 @@ app.get('/api/productos', async function(req, res) {
   const limit = req.query.limit || 5;
   if (!string) return res.status(400).json({ error: 'Falta string' });
   try {
-    const r = await fetch(SEPA + '/productos?string=' + encodeURIComponent(string) + '&limit=' + limit, { headers: HEADERS });
+    const r = await fetchSEPA(SEPA + '/productos?string=' + encodeURIComponent(string) + '&limit=' + limit, 8000);
     if (!r.ok) throw new Error('SEPA ' + r.status);
     const data = await r.json();
     const productos = (data.productos || []).map(function(p) {
@@ -62,7 +75,7 @@ app.get('/api/precios', async function(req, res) {
   const producto = req.query.producto;
   if (!sucursales || !producto) return res.status(400).json({ error: 'Faltan parametros' });
   try {
-    const r = await fetch(SEPA + '/productos-sucursales?ids_productos=' + producto + '&ids_sucursales=' + sucursales, { headers: HEADERS });
+    const r = await fetchSEPA(SEPA + '/productos-sucursales?ids_productos=' + producto + '&ids_sucursales=' + sucursales, 8000);
     if (!r.ok) throw new Error('SEPA ' + r.status);
     const data = await r.json();
     const precios = [];
