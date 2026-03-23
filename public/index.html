@@ -1,0 +1,791 @@
+<!DOCTYPE html>
+
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PrecioYa — Precios reales cerca tuyo</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,wght@0,400;0,700;0,900;1,400&family=Outfit:wght@300;400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+:root {
+  --bg: #f4f0e8;
+  --ink: #1a1208;
+  --ink2: #3a3020;
+  --ink3: #8a7a62;
+  --surface: #fffdf6;
+  --card: #ffffff;
+  --border: #e2d8c4;
+  --green: #1a5c32;
+  --green-l: #e6f4ec;
+  --green-m: #28865a;
+  --red: #b83228;
+  --amber: #c87a10;
+  --radius: 14px;
+  --sh: 0 2px 14px rgba(26,18,8,.09);
+  --sh-lg: 0 8px 36px rgba(26,18,8,.15);
+}
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:'Outfit',sans-serif;min-height:100vh;font-size:15px}
+.app{display:grid;grid-template-rows:auto 1fr;height:100vh;max-height:100vh;overflow:hidden}
+
+/* TOPBAR */
+.topbar{background:var(–ink);padding:0 20px;display:flex;align-items:center;gap:14px;height:62px;z-index:200;flex-shrink:0}
+.logo{font-family:‘Fraunces’,serif;font-size:1.45rem;font-weight:900;color:#fff;white-space:nowrap;letter-spacing:-.5px}
+.logo em{font-style:italic;color:#6fcf8a}
+.search-bar{flex:1;display:flex;align-items:center;background:rgba(255,255,255,.1);border:1.5px solid rgba(255,255,255,.15);border-radius:100px;padding:0 5px 0 14px;gap:8px;transition:border-color .2s;max-width:580px}
+.search-bar:focus-within{border-color:#6fcf8a;background:rgba(255,255,255,.14)}
+.search-bar input{flex:1;background:transparent;border:none;outline:none;color:#fff;font-family:‘Outfit’,sans-serif;font-size:.9rem;padding:9px 0}
+.search-bar input::placeholder{color:rgba(255,255,255,.38)}
+.search-bar button{background:#6fcf8a;color:var(–ink);border:none;border-radius:100px;padding:7px 16px;font-family:‘Outfit’,sans-serif;font-weight:600;font-size:.82rem;cursor:pointer;transition:background .15s;white-space:nowrap}
+.search-bar button:hover{background:#8ae0a0}
+.search-bar button:disabled{opacity:.5;cursor:not-allowed}
+.loc-pill{display:flex;align-items:center;gap:6px;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.14);border-radius:100px;padding:5px 12px;font-size:.75rem;color:rgba(255,255,255,.55);cursor:pointer;transition:all .2s;white-space:nowrap}
+.loc-pill:hover{border-color:#6fcf8a;color:#6fcf8a}
+.loc-dot{width:7px;height:7px;border-radius:50%;background:#6fcf8a;box-shadow:0 0 6px #6fcf8a;animation:blink 2s infinite;flex-shrink:0}
+@keyframes blink{50%{opacity:.3}}
+
+/* LAYOUT */
+.main{display:grid;grid-template-columns:370px 1fr;overflow:hidden}
+.sidebar{background:var(–surface);border-right:1px solid var(–border);display:flex;flex-direction:column;overflow:hidden}
+.sb-head{padding:14px 18px 10px;border-bottom:1px solid var(–border);flex-shrink:0}
+.sb-title{font-family:‘Fraunces’,serif;font-size:.95rem;font-weight:700;margin-bottom:9px;color:var(–ink)}
+.filter-row{display:flex;gap:5px;flex-wrap:wrap}
+.chip{background:var(–bg);border:1px solid var(–border);border-radius:100px;padding:3px 11px;font-size:.72rem;color:var(–ink3);cursor:pointer;transition:all .15s;font-weight:500}
+.chip:hover{border-color:var(–green);color:var(–green)}
+.chip.on{background:var(–green-l);border-color:var(–green);color:var(–green)}
+.sort-row{display:flex;gap:5px;margin-top:7px;align-items:center}
+.sort-lbl{font-size:.7rem;color:var(–ink3)}
+.sort-btn{background:transparent;border:1px solid var(–border);border-radius:6px;padding:3px 9px;font-size:.7rem;color:var(–ink3);cursor:pointer;font-family:‘Outfit’,sans-serif;transition:all .15s}
+.sort-btn:hover,.sort-btn.on{background:var(–ink);color:#fff;border-color:var(–ink)}
+
+/* MODE TABS */
+.mode-tabs{display:flex;border-bottom:1px solid var(–border);flex-shrink:0}
+.mode-tab{flex:1;padding:10px;font-size:.78rem;font-weight:600;text-align:center;cursor:pointer;color:var(–ink3);border-bottom:2px solid transparent;transition:all .2s;background:transparent;border-left:none;border-right:none;border-top:none;font-family:‘Outfit’,sans-serif}
+.mode-tab.on{color:var(–green);border-bottom-color:var(–green)}
+
+/* STATUS BAR */
+.status-bar{padding:8px 14px;background:var(–bg);border-bottom:1px solid var(–border);font-size:.75rem;color:var(–ink3);display:none;align-items:center;gap:6px;flex-shrink:0}
+.status-bar.show{display:flex}
+.status-dot{width:6px;height:6px;border-radius:50%;background:var(–green-m)}
+.status-badge{background:var(–green-l);color:var(–green);border-radius:100px;padding:2px 8px;font-weight:600;font-size:.68rem;margin-left:auto}
+.status-badge.sepa{background:#fff3e0;color:var(–amber)}
+.status-badge.ai{background:#f0f4ff;color:#4060c0}
+
+/* SCROLL */
+.results-scroll{flex:1;overflow-y:auto;padding:12px 14px}
+.results-scroll::-webkit-scrollbar{width:3px}
+.results-scroll::-webkit-scrollbar-thumb{background:var(–border);border-radius:3px}
+
+/* STATES */
+.state-box{padding:44px 18px;text-align:center}
+.state-icon{font-size:2.4rem;margin-bottom:10px}
+.state-title{font-family:‘Fraunces’,serif;font-size:.95rem;font-weight:700;margin-bottom:5px}
+.state-sub{font-size:.8rem;color:var(–ink3);line-height:1.6}
+.spinner-wrap{display:flex;flex-direction:column;align-items:center;padding:44px 18px;gap:14px}
+.spinner{width:34px;height:34px;border:3px solid var(–border);border-top-color:var(–green-m);border-radius:50%;animation:spin .7s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.spin-steps{font-size:.78rem;color:var(–ink3);text-align:left;display:flex;flex-direction:column;gap:4px}
+.spin-step{padding:2px 0;transition:color .3s}
+.spin-step.active{color:var(–ink);font-weight:600}
+.spin-step.done{color:var(–green-m)}
+.spin-step.done::before{content:’✓ ’}
+
+/* RESULT CARDS */
+.r-card{background:var(–card);border:1px solid var(–border);border-radius:var(–radius);padding:13px 15px;margin-bottom:9px;cursor:pointer;transition:all .18s;position:relative;animation:fadeUp .22s ease both}
+@keyframes fadeUp{from{opacity:0;transform:translateY(7px)}to{opacity:1;transform:translateY(0)}}
+.r-card:hover{border-color:var(–green-m);box-shadow:var(–sh);transform:translateX(2px)}
+.r-card.selected{border-color:var(–green);background:var(–green-l)}
+.r-card.best{border-color:var(–green)}
+.best-badge{position:absolute;top:-1px;right:11px;background:var(–green);color:#fff;font-size:.58rem;font-weight:700;padding:2px 8px;border-radius:0 0 6px 6px;letter-spacing:.5px;text-transform:uppercase}
+.source-tag{position:absolute;top:8px;right:11px;font-size:.6rem;padding:2px 7px;border-radius:100px;font-weight:600}
+.source-tag.sepa{background:#fff3e0;color:var(–amber)}
+.source-tag.ai{background:#f0f4ff;color:#4060c0}
+.rc-top{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:7px}
+.rc-name{font-family:‘Fraunces’,serif;font-weight:700;font-size:.92rem;padding-right:60px}
+.rc-sub{font-size:.7rem;color:var(–ink3);margin-top:1px}
+.rc-price{font-family:‘Fraunces’,serif;font-size:1.35rem;font-weight:900;color:var(–green);white-space:nowrap;text-align:right}
+.rc-price.hi{color:var(–red)}
+.rc-price.mid{color:var(–amber)}
+.rc-price small{font-size:.65rem;font-weight:400;color:var(–ink3);display:block}
+.rc-meta{display:flex;gap:9px;flex-wrap:wrap;font-size:.72rem;color:var(–ink3)}
+.rc-meta span{display:flex;align-items:center;gap:3px}
+.rc-bar-bg{height:3px;background:var(–border);border-radius:3px;overflow:hidden;margin-top:8px}
+.rc-bar-fill{height:100%;border-radius:3px;background:var(–green-m);transition:width .5s ease}
+.rc-saving{font-size:.68rem;margin-top:3px;color:var(–ink3)}
+.rc-saving b{color:var(–red)}
+.rc-promo{display:inline-block;margin-top:4px;font-size:.68rem;background:#e8f4ec;color:var(–green);border-radius:4px;padding:2px 7px;font-weight:600}
+
+/* SUMMARY */
+.summary-bar{border-top:1px solid var(–border);padding:9px 14px;background:var(–bg);flex-shrink:0;display:none}
+.summary-bar.show{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.sb-info{font-size:.76rem;color:var(–ink3)}
+.sb-info strong{color:var(–ink)}
+.sb-save{font-size:.72rem;background:#fdecea;color:var(–red);border-radius:100px;padding:3px 10px;font-weight:600}
+
+/* SUGGESTIONS */
+.sug-panel{padding:16px 14px}
+.sug-label{font-size:.7rem;color:var(–ink3);text-transform:uppercase;letter-spacing:.6px;font-weight:600;margin-bottom:9px}
+.sug-grid{display:flex;flex-direction:column;gap:5px}
+.sug-item{display:flex;align-items:center;gap:9px;background:var(–card);border:1px solid var(–border);border-radius:10px;padding:9px 13px;cursor:pointer;transition:all .15s;font-size:.83rem}
+.sug-item:hover{border-color:var(–green);background:var(–green-l)}
+.sug-emoji{font-size:1rem}
+
+/* MAP */
+.map-wrap{position:relative;flex:1}
+#map{width:100%;height:100%}
+.map-top{position:absolute;top:14px;left:50%;transform:translateX(-50%);z-index:500;background:#fff;border-radius:100px;box-shadow:var(–sh-lg);padding:7px 16px;font-size:.78rem;color:var(–ink3);display:none;align-items:center;gap:8px;white-space:nowrap;max-width:80%}
+.map-top.show{display:flex}
+.mt-dot{width:8px;height:8px;border-radius:50%;background:#3b82f6;flex-shrink:0}
+.map-overlay{position:absolute;bottom:18px;right:18px;z-index:500;display:none;flex-direction:column;gap:7px;max-width:240px}
+.map-overlay.show{display:flex}
+.mo-card{background:#fff;border-radius:var(–radius);padding:12px 14px;box-shadow:var(–sh-lg);border-left:4px solid var(–green);cursor:pointer;transition:transform .15s}
+.mo-card:hover{transform:scale(1.02)}
+.mo-name{font-family:‘Fraunces’,serif;font-weight:700;font-size:.85rem}
+.mo-price{color:var(–green);font-weight:700;font-size:1.05rem}
+.mo-dist{font-size:.72rem;color:var(–ink3)}
+.mo-src{font-size:.6rem;color:var(–amber);font-weight:600}
+
+/* INFO PANEL */
+.info-panel{position:absolute;bottom:18px;left:18px;z-index:500;background:#fff;border-radius:var(–radius);padding:14px 16px;box-shadow:var(–sh-lg);max-width:260px;display:none;font-size:.78rem}
+.info-panel.show{display:block}
+.ip-title{font-family:‘Fraunces’,serif;font-weight:700;font-size:.9rem;margin-bottom:6px}
+.ip-row{display:flex;justify-content:space-between;padding:3px 0;border-bottom:1px solid var(–border)}
+.ip-row:last-child{border:none}
+.ip-key{color:var(–ink3)}
+.ip-val{font-weight:600}
+
+/* TOOLTIP */
+.user-marker{width:14px;height:14px;background:#3b82f6;border-radius:50%;border:3px solid #fff;box-shadow:0 0 0 4px rgba(59,130,246,.22)}
+
+@media(max-width:700px){
+.main{grid-template-columns:1fr;grid-template-rows:auto 280px}
+.topbar{padding:0 10px;gap:8px}
+.logo{font-size:1.1rem}
+.loc-pill span{display:none}
+}
+</style>
+
+</head>
+<body>
+<div class="app">
+
+<!-- TOPBAR -->
+
+<div class="topbar">
+  <div class="logo">Precio<em>Ya</em></div>
+  <div class="search-bar">
+    <svg width="14" height="14" fill="none" stroke="rgba(255,255,255,.4)" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+    <input type="text" id="searchInput" placeholder="Buscá: leche 1L, arroz, yerba, jabón..." autocomplete="off"/>
+    <button id="searchBtn" onclick="doSearch()">Buscar</button>
+  </div>
+  <div class="loc-pill" id="locPill" onclick="detectLocation()">
+    <div class="loc-dot"></div>
+    <span id="locText">Detectar ubicación</span>
+  </div>
+</div>
+
+<!-- MAIN -->
+
+<div class="main">
+
+  <!-- SIDEBAR -->
+
+  <div class="sidebar">
+
+```
+<div class="sb-head" id="sbHead" style="display:none">
+  <div class="sb-title" id="sbTitle">Resultados</div>
+  <div class="filter-row">
+    <div class="chip on" onclick="setFilter('todos',this)">Todos</div>
+    <div class="chip" onclick="setFilter('Hiper/Supermercado',this)">🛒 Supers</div>
+    <div class="chip" onclick="setFilter('Mayorista',this)">📦 Mayoristas</div>
+    <div class="chip" onclick="setFilter('Farmacia',this)">💊 Farmacias</div>
+    <div class="chip" onclick="setFilter('Almacen',this)">🏪 Almacenes</div>
+  </div>
+  <div class="sort-row">
+    <span class="sort-lbl">Ordenar:</span>
+    <button class="sort-btn on" id="srtP" onclick="setSort('precio')">$ Precio</button>
+    <button class="sort-btn" id="srtD" onclick="setSort('distancia')">📍 Distancia</button>
+  </div>
+</div>
+
+<div class="status-bar" id="statusBar">
+  <div class="status-dot"></div>
+  <span id="statusText">Datos cargados</span>
+  <span class="status-badge" id="statusBadge">SEPA</span>
+</div>
+
+<div class="results-scroll" id="resultsScroll">
+
+  <!-- Sugerencias -->
+  <div class="sug-panel" id="sugPanel">
+    <div class="sug-label">Búsquedas populares</div>
+    <div class="sug-grid">
+      <div class="sug-item" onclick="qs('leche entera 1 litro')"><span class="sug-emoji">🥛</span> Leche entera 1L</div>
+      <div class="sug-item" onclick="qs('arroz largo fino 1kg')"><span class="sug-emoji">🌾</span> Arroz largo fino 1kg</div>
+      <div class="sug-item" onclick="qs('aceite de girasol 900ml')"><span class="sug-emoji">🫙</span> Aceite de girasol 900ml</div>
+      <div class="sug-item" onclick="qs('yerba mate 1kg')"><span class="sug-emoji">🧉</span> Yerba mate 1kg</div>
+      <div class="sug-item" onclick="qs('fideos spaghetti 500g')"><span class="sug-emoji">🍝</span> Fideos spaghetti 500g</div>
+      <div class="sug-item" onclick="qs('azucar 1kg')"><span class="sug-emoji">🍬</span> Azúcar 1kg</div>
+      <div class="sug-item" onclick="qs('pollo entero fresco')"><span class="sug-emoji">🍗</span> Pollo entero fresco</div>
+      <div class="sug-item" onclick="qs('detergente lavavajillas')"><span class="sug-emoji">🧴</span> Detergente lavavajillas</div>
+    </div>
+  </div>
+
+  <!-- Loading -->
+  <div class="spinner-wrap" id="loadPanel" style="display:none">
+    <div class="spinner"></div>
+    <div class="spin-steps">
+      <div class="spin-step" id="sp1">📍 Obteniendo tu ubicación...</div>
+      <div class="spin-step" id="sp2">🗺️ Buscando sucursales cercanas en SEPA...</div>
+      <div class="spin-step" id="sp3">🔍 Buscando el producto...</div>
+      <div class="spin-step" id="sp4">💰 Cruzando precios por sucursal...</div>
+      <div class="spin-step" id="sp5">✅ Ordenando resultados...</div>
+    </div>
+  </div>
+
+  <!-- Results -->
+  <div id="resultsList"></div>
+
+  <!-- Empty -->
+  <div class="state-box" id="emptyPanel" style="display:none">
+    <div class="state-icon">😕</div>
+    <div class="state-title">Sin resultados</div>
+    <div class="state-sub">No encontramos ese producto en las sucursales cercanas.<br><br>Probá con términos más simples:<br>"leche", "arroz", "aceite"</div>
+  </div>
+
+  <!-- CORS error -->
+  <div class="state-box" id="corsPanel" style="display:none">
+    <div class="state-icon">🔌</div>
+    <div class="state-title">Necesitás el servidor local</div>
+    <div class="state-sub">
+      La API de Precios Claros requiere un proxy para funcionar en el browser.<br><br>
+      <strong>Iniciá el servidor con:</strong><br>
+      <code style="background:#f0f0f0;padding:4px 8px;border-radius:4px;font-size:.8rem">node server.js</code><br><br>
+      Mientras tanto, mostramos resultados con IA.
+    </div>
+  </div>
+
+</div>
+
+<div class="summary-bar" id="summaryBar">
+  <div class="sb-info"><strong id="sbCount">0</strong> sucursales · <strong id="sbRadius">6km</strong></div>
+  <div class="sb-save" id="sbSave"></div>
+</div>
+```
+
+  </div>
+
+  <!-- MAP -->
+
+  <div class="map-wrap">
+    <div id="map"></div>
+    <div class="map-top" id="mapTop">
+      <div class="mt-dot"></div>
+      <span id="mapTopText">Buscá un producto para ver los precios en el mapa</span>
+    </div>
+    <div class="map-overlay" id="mapOverlay"></div>
+    <div class="info-panel" id="infoPanel">
+      <div class="ip-title" id="ipTitle">Detalles</div>
+      <div id="ipRows"></div>
+    </div>
+  </div>
+
+</div>
+</div>
+
+<!-- ════════════════════════════════════════════ -->
+
+<script>
+// ─────────────────────────────────────
+//  CONFIG
+// ─────────────────────────────────────
+const PROXY = window.location.origin; // Funciona en local Y en Railway automáticamente // servidor local Node.js
+const SEPA_BASE = 'https://d3e6htiiul5ek9.cloudfront.net/prod';
+const GEOREF = 'https://apis.datos.gob.ar/georef/api';
+
+// ─────────────────────────────────────
+//  STATE
+// ─────────────────────────────────────
+let map, userMarker, storeMarkers = [];
+let userCoords = null;
+let allResults = [];
+let sortMode = 'precio';
+let filterMode = 'todos';
+let dataSource = 'ai'; // 'sepa' | 'ai'
+
+// ─────────────────────────────────────
+//  MAP
+// ─────────────────────────────────────
+function initMap() {
+  map = L.map('map', { zoomControl: false }).setView([-34.6037, -58.3816], 13);
+  L.control.zoom({ position: 'bottomleft' }).addTo(map);
+  L.tileLayer('[https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png]https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+    attribution: '© OpenStreetMap © CARTO', maxZoom: 19
+  }).addTo(map);
+}
+
+// ─────────────────────────────────────
+//  GEOLOCATION
+// ─────────────────────────────────────
+async function detectLocation() {
+  document.getElementById('locText').textContent = 'Detectando...';
+  return new Promise(res => {
+    if (!navigator.geolocation) { useDefaultLoc(); res(false); return; }
+    navigator.geolocation.getCurrentPosition(
+      pos => {
+        userCoords = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+        document.getElementById('locText').textContent = '✓ Ubicación detectada';
+        placeUserPin(userCoords.lat, userCoords.lng);
+        map.setView([userCoords.lat, userCoords.lng], 14);
+        res(true);
+      },
+      () => { useDefaultLoc(); res(false); }
+    );
+  });
+}
+
+function useDefaultLoc() {
+  userCoords = { lat: -34.6037, lng: -58.3816 };
+  document.getElementById('locText').textContent = 'Buenos Aires (defecto)';
+  placeUserPin(userCoords.lat, userCoords.lng);
+  map.setView([userCoords.lat, userCoords.lng], 14);
+}
+
+function placeUserPin(lat, lng) {
+  if (userMarker) map.removeLayer(userMarker);
+  const ico = L.divIcon({ className:'', html:'<div class="user-marker"></div>', iconSize:[14,14], iconAnchor:[7,7] });
+  userMarker = L.marker([lat, lng], { icon: ico }).addTo(map).bindPopup('<b>📍 Tu ubicación</b>');
+}
+
+// ─────────────────────────────────────
+//  SEARCH ENTRY POINT
+// ─────────────────────────────────────
+function qs(t) { document.getElementById('searchInput').value = t; doSearch(); }
+
+async function doSearch() {
+  const q = document.getElementById('searchInput').value.trim();
+  if (!q) return;
+
+  // Reset UI
+  showPanel('load');
+  document.getElementById('sbHead').style.display = 'none';
+  document.getElementById('summaryBar').classList.remove('show');
+  document.getElementById('statusBar').classList.remove('show');
+  document.getElementById('mapOverlay').classList.remove('show');
+  document.getElementById('infoPanel').classList.remove('show');
+  document.getElementById('resultsList').innerHTML = '';
+  document.getElementById('searchBtn').disabled = true;
+  clearMarkers();
+
+  animateSteps();
+
+  if (!userCoords) await detectLocation();
+
+  // Try SEPA → fallback to AI
+  let results = null;
+  try {
+    results = await fetchFromSEPA(q, userCoords);
+    dataSource = 'sepa';
+  } catch(e) {
+    console.warn('SEPA no disponible, usando IA:', e.message);
+    results = await fetchFromAI(q, userCoords);
+    dataSource = 'ai';
+  }
+
+  allResults = results || [];
+  document.getElementById('searchBtn').disabled = false;
+
+  if (!allResults.length) {
+    showPanel('empty'); return;
+  }
+
+  // Show results
+  filterMode = 'todos';
+  sortMode = 'precio';
+  resetChips();
+
+  document.getElementById('sbHead').style.display = 'block';
+  document.getElementById('sbTitle').textContent = `"${q}"`;
+  document.getElementById('statusBar').classList.add('show');
+
+  if (dataSource === 'sepa') {
+    document.getElementById('statusText').textContent = 'Datos reales de SEPA (Precios Claros)';
+    const b = document.getElementById('statusBadge');
+    b.textContent = '✓ DATOS REALES'; b.className = 'status-badge sepa';
+  } else {
+    document.getElementById('statusText').textContent = 'Datos simulados con IA (servidor SEPA no disponible)';
+    const b = document.getElementById('statusBadge');
+    b.textContent = '⚡ IA'; b.className = 'status-badge ai';
+  }
+
+  showPanel('results');
+  renderCards();
+  renderMarkers();
+  document.getElementById('mapTop').classList.add('show');
+  document.getElementById('mapTopText').textContent = `${allResults.length} sucursales · "${q}"`;
+}
+
+// ─────────────────────────────────────
+//  SEPA INTEGRATION (requiere proxy local)
+// ─────────────────────────────────────
+async function fetchFromSEPA(query, coords) {
+  setStep(2);
+
+  // 1. Obtener sucursales cercanas via proxy
+  const sucRes = await fetchWithTimeout(
+    `${PROXY}/api/sucursales?lat=${coords.lat}&lng=${coords.lng}&limit=30`,
+    5000
+  );
+  if (!sucRes.ok) throw new Error('Proxy no disponible');
+  const sucData = await sucRes.json();
+  const sucursales = sucData.sucursales || [];
+  if (!sucursales.length) throw new Error('Sin sucursales');
+
+  setStep(3);
+
+  // 2. Buscar productos por nombre
+  const prodRes = await fetchWithTimeout(
+    `${PROXY}/api/productos?string=${encodeURIComponent(query)}&limit=5`,
+    5000
+  );
+  const prodData = await prodRes.json();
+  const productos = prodData.productos || [];
+  if (!productos.length) throw new Error('Sin productos');
+
+  setStep(4);
+
+  // 3. Para cada producto, buscar precios en las sucursales cercanas
+  const results = [];
+  const topSucIds = sucursales.slice(0, 10).map(s => s.id).join(',');
+
+  for (const prod of productos.slice(0, 3)) {
+    try {
+      const preciosRes = await fetchWithTimeout(
+        `${PROXY}/api/precios?sucursales=${topSucIds}&producto=${prod.id}`,
+        6000
+      );
+      const preciosData = await preciosRes.json();
+      const precios = preciosData.precios || [];
+
+      for (const p of precios) {
+        const suc = sucursales.find(s => s.id === p.sucursalId);
+        if (!suc || !p.precio) continue;
+        const dist = calcDist(coords.lat, coords.lng, suc.lat, suc.lng);
+        results.push({
+          comercio: suc.banderaDescripcion || suc.comercioRazonSocial,
+          tipo: suc.sucursalTipo || 'Hiper/Supermercado',
+          direccion: `${suc.direccion}, ${suc.localidad}`,
+          lat: parseFloat(suc.lat),
+          lng: parseFloat(suc.lng),
+          distancia_km: Math.round(dist * 10) / 10,
+          precio: p.precio,
+          precioPromoA: p.precioPromoA || null,
+          producto: prod.nombre,
+          stock: 'disponible',
+          horario: suc.horario || 'Consultar',
+          calificacion: 4.0 + Math.random() * 0.9,
+          fuente: 'sepa'
+        });
+      }
+    } catch(e) { /* skip */ }
+  }
+
+  setStep(5);
+  // Eliminar duplicados por sucursal (quedarse con el precio más bajo)
+  const seen = {};
+  const deduped = [];
+  for (const r of results) {
+    const key = `${r.comercio}|${r.direccion}`;
+    if (!seen[key] || r.precio < seen[key].precio) {
+      seen[key] = r;
+    }
+  }
+  Object.values(seen).forEach(r => deduped.push(r));
+  return deduped.sort((a,b) => a.precio - b.precio);
+}
+
+// ─────────────────────────────────────
+//  AI FALLBACK
+// ─────────────────────────────────────
+async function fetchFromAI(query, coords) {
+  setStep(3);
+  const prompt = `Sos un motor de comparación de precios para Argentina. El usuario busca: "${query}".
+Su ubicación: lat ${coords.lat.toFixed(4)}, lng ${coords.lng.toFixed(4)}.
+
+Generá 8 sucursales REALISTAS de cadenas argentinas reales (Carrefour, Coto, Día, Jumbo, La Anónima, Disco, Vea, Changomas, etc.) con precios para ese producto.
+
+Respondé SOLO con JSON válido, sin texto extra:
+{
+  "resultados": [
+    {
+      "comercio": "nombre cadena",
+      "tipo": "Hiper/Supermercado|Mayorista|Farmacia|Almacen",
+      "direccion": "Calle 123, Barrio",
+      "lat": -34.0000,
+      "lng": -58.0000,
+      "distancia_km": 1.2,
+      "precio": 1500.00,
+      "precioPromoA": null,
+      "producto": "nombre exacto del producto",
+      "stock": "disponible",
+      "horario": "08:00-22:00",
+      "calificacion": 4.3,
+      "fuente": "ai"
+    }
+  ]
+}
+Reglas: precios reales 2025 en pesos argentinos, coordenadas cercanas al punto dado (±0.04 grados), variación de precios 20-40% entre comercios, ordenar por precio ascendente.`;
+
+  const r = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      model: 'claude-sonnet-4-20250514',
+      max_tokens: 1500,
+      messages: [{ role: 'user', content: prompt }]
+    })
+  });
+  const data = await r.json();
+  const text = data.content?.map(b => b.text||'').join('').replace(/```json|```/g,'').trim();
+  const parsed = JSON.parse(text);
+  setStep(5);
+  return parsed.resultados || [];
+}
+
+// ─────────────────────────────────────
+//  RENDER CARDS
+// ─────────────────────────────────────
+function getItems() {
+  let items = [...allResults];
+  if (filterMode !== 'todos') items = items.filter(r => r.tipo === filterMode);
+  if (sortMode === 'precio') items.sort((a,b) => a.precio - b.precio);
+  else items.sort((a,b) => a.distancia_km - b.distancia_km);
+  return items;
+}
+
+function renderCards() {
+  const items = getItems();
+  const list = document.getElementById('resultsList');
+  const sb = document.getElementById('summaryBar');
+
+  if (!items.length) {
+    list.innerHTML = `<div class="state-box"><div class="state-icon">🔎</div><div class="state-title">Sin resultados para este filtro</div></div>`;
+    sb.classList.remove('show'); return;
+  }
+
+  const minP = Math.min(...items.map(r=>r.precio));
+  const maxP = Math.max(...items.map(r=>r.precio));
+  const diff = maxP > minP ? Math.round((maxP-minP)/minP*100) : 0;
+
+  document.getElementById('sbCount').textContent = items.length;
+  document.getElementById('sbSave').textContent = diff > 0 ? `Ahorrás hasta ${diff}%` : 'Mismo precio';
+  sb.classList.add('show');
+
+  list.innerHTML = items.map((r, i) => {
+    const isBest = r.precio === minP;
+    const pClass = r.precio > minP*1.18 ? 'hi' : r.precio > minP*1.06 ? 'mid' : '';
+    const barW = Math.round(100 - ((r.precio-minP)/(maxP-minP||1))*70);
+    const saving = isBest ? null : `$${(r.precio-minP).toLocaleString('es-AR')} más caro`;
+    const srcTag = r.fuente === 'sepa'
+      ? `<span class="source-tag sepa">SEPA</span>`
+      : `<span class="source-tag ai">IA</span>`;
+    const promoTag = r.precioPromoA
+      ? `<span class="rc-promo">Promo: $${r.precioPromoA.toLocaleString('es-AR')}</span>`
+      : '';
+    const prodName = r.producto ? `<div class="rc-sub">${r.producto}</div>` : '';
+
+    return `<div class="r-card${isBest?' best':''}" style="animation-delay:${i*.04}s" onclick="selectCard(${i},${r.lat},${r.lng})" data-idx="${i}">
+      ${isBest?'<div class="best-badge">★ Mejor precio</div>':''}
+      ${srcTag}
+      <div class="rc-top">
+        <div>
+          <div class="rc-name">${r.comercio}</div>
+          ${prodName}
+          <div class="rc-sub" style="margin-top:1px">${r.direccion}</div>
+        </div>
+        <div>
+          <div class="rc-price ${pClass}">$${r.precio.toLocaleString('es-AR')}<small>por unidad</small></div>
+        </div>
+      </div>
+      <div class="rc-meta">
+        <span>📍 ${r.distancia_km} km</span>
+        <span>⭐ ${(r.calificacion||4).toFixed(1)}</span>
+        <span>🕐 ${r.horario||'Consultar'}</span>
+        <span style="color:${r.stock==='disponible'?'var(--green)':'var(--amber)}'}">● ${r.stock||'disponible'}</span>
+      </div>
+      ${promoTag}
+      <div class="rc-bar-bg"><div class="rc-bar-fill" style="width:${barW}%"></div></div>
+      <div class="rc-saving">${saving?`<b>${saving}</b> vs. el más barato`:'<span style="color:var(--green)">✓ El más económico de la zona</span>'}</div>
+    </div>`;
+  }).join('');
+
+  // Map overlay: top 3
+  const top3 = items.slice(0,3);
+  document.getElementById('mapOverlay').innerHTML = top3.map(r=>`
+    <div class="mo-card" onclick="flyTo(${r.lat},${r.lng})">
+      <div class="mo-name">${r.comercio}</div>
+      <div class="mo-price">$${r.precio.toLocaleString('es-AR')}</div>
+      <div class="mo-dist">📍 ${r.distancia_km}km · ${r.direccion}</div>
+      <div class="mo-src">${r.fuente==='sepa'?'✓ Dato real SEPA':'⚡ IA'}</div>
+    </div>`).join('');
+  document.getElementById('mapOverlay').classList.add('show');
+}
+
+// ─────────────────────────────────────
+//  MARKERS
+// ─────────────────────────────────────
+const COLORS = ['#1a5c32','#28865a','#c87a10','#b83228','#3b82f6','#7c3aed','#be185d','#0891b2'];
+
+function renderMarkers() {
+  clearMarkers();
+  const items = getItems();
+  if (!items.length) return;
+
+  const minP = Math.min(...items.map(r=>r.precio));
+  const bounds = userCoords ? [[userCoords.lat, userCoords.lng]] : [];
+
+  items.forEach((r, i) => {
+    if (!r.lat || !r.lng) return;
+    const isBest = r.precio === minP;
+    const color = isBest ? '#1a5c32' : COLORS[i % COLORS.length];
+    const sz = isBest ? 38 : 30;
+    const label = `$${Math.round(r.precio/1000)}k`;
+    const ico = L.divIcon({
+      className: '',
+      html: `<div style="background:${color};color:#fff;width:${sz}px;height:${sz}px;border-radius:50% 50% 50% 0;transform:rotate(-45deg);display:flex;align-items:center;justify-content:center;box-shadow:0 2px 10px rgba(0,0,0,.28);border:2px solid #fff;font-family:'Outfit',sans-serif;font-size:.58rem;font-weight:700"><div style="transform:rotate(45deg)">${label}</div></div>`,
+      iconSize: [sz,sz], iconAnchor: [sz/2, sz]
+    });
+
+    const m = L.marker([r.lat, r.lng], { icon: ico })
+      .addTo(map)
+      .bindPopup(`
+        <div style="font-family:'Outfit',sans-serif;min-width:170px">
+          <b>${r.comercio}</b><br>
+          <span style="color:#1a5c32;font-size:1.1rem;font-weight:700">$${r.precio.toLocaleString('es-AR')}</span>
+          ${r.precioPromoA?`<span style="color:#c87a10;font-size:.8rem;margin-left:6px">Promo $${r.precioPromoA.toLocaleString('es-AR')}</span>`:''}
+          <br><small style="color:#666">${r.direccion}</small><br>
+          <small>📍 ${r.distancia_km}km · ⭐ ${(r.calificacion||4).toFixed(1)} · ${r.horario||'Consultar'}</small><br>
+          <small style="color:${r.fuente==='sepa'?'#c87a10':'#4060c0'}">${r.fuente==='sepa'?'✓ Dato real SEPA':'⚡ Generado por IA'}</small>
+        </div>`);
+
+    storeMarkers.push(m);
+    bounds.push([r.lat, r.lng]);
+  });
+
+  if (bounds.length > 1) map.fitBounds(bounds, { padding: [40,40] });
+}
+
+function clearMarkers() {
+  storeMarkers.forEach(m => map.removeLayer(m));
+  storeMarkers = [];
+}
+
+// ─────────────────────────────────────
+//  INTERACTIONS
+// ─────────────────────────────────────
+function selectCard(idx, lat, lng) {
+  document.querySelectorAll('.r-card').forEach(c => c.classList.remove('selected'));
+  document.querySelector(`.r-card[data-idx="${idx}"]`)?.classList.add('selected');
+  flyTo(lat, lng);
+  const r = getItems()[idx];
+  if (r) {
+    document.getElementById('infoPanel').classList.add('show');
+    document.getElementById('ipTitle').textContent = r.comercio;
+    document.getElementById('ipRows').innerHTML = `
+      <div class="ip-row"><span class="ip-key">Precio</span><span class="ip-val" style="color:var(--green)">$${r.precio.toLocaleString('es-AR')}</span></div>
+      ${r.precioPromoA?`<div class="ip-row"><span class="ip-key">Promo A</span><span class="ip-val" style="color:var(--amber)">$${r.precioPromoA.toLocaleString('es-AR')}</span></div>`:''}
+      <div class="ip-row"><span class="ip-key">Distancia</span><span class="ip-val">${r.distancia_km} km</span></div>
+      <div class="ip-row"><span class="ip-key">Horario</span><span class="ip-val">${r.horario||'Consultar'}</span></div>
+      <div class="ip-row"><span class="ip-key">Tipo</span><span class="ip-val">${r.tipo}</span></div>
+      <div class="ip-row"><span class="ip-key">Fuente</span><span class="ip-val" style="color:${r.fuente==='sepa'?'var(--amber)':'#4060c0'}">${r.fuente==='sepa'?'SEPA (real)':'IA (estimado)'}</span></div>
+    `;
+  }
+  if (storeMarkers[idx]) storeMarkers[idx].openPopup();
+}
+
+function flyTo(lat, lng) { map.flyTo([lat, lng], 16, { duration: 0.8 }); }
+
+function setFilter(f, el) {
+  filterMode = f;
+  document.querySelectorAll('.filter-row .chip').forEach(c=>c.classList.remove('on'));
+  el.classList.add('on');
+  renderCards(); renderMarkers();
+}
+
+function setSort(s) {
+  sortMode = s;
+  document.getElementById('srtP').classList.toggle('on', s==='precio');
+  document.getElementById('srtD').classList.toggle('on', s==='distancia');
+  renderCards(); renderMarkers();
+}
+
+function resetChips() {
+  document.querySelectorAll('.filter-row .chip').forEach((c,i)=>c.classList.toggle('on',i===0));
+  document.getElementById('srtP').classList.add('on');
+  document.getElementById('srtD').classList.remove('on');
+}
+
+// ─────────────────────────────────────
+//  HELPERS
+// ─────────────────────────────────────
+function showPanel(name) {
+  document.getElementById('sugPanel').style.display = name==='suggestions'?'block':'none';
+  document.getElementById('loadPanel').style.display = name==='load'?'flex':'none';
+  document.getElementById('emptyPanel').style.display = name==='empty'?'block':'none';
+  document.getElementById('corsPanel').style.display = name==='cors'?'block':'none';
+}
+
+const stepTimes = [0, 400, 900, 1500, 2200];
+function animateSteps() {
+  for (let i=1; i<=5; i++) {
+    const el = document.getElementById(`sp${i}`);
+    el.className = 'spin-step';
+    setTimeout(() => el.classList.add('active'), stepTimes[i-1]);
+    setTimeout(() => { el.classList.remove('active'); el.classList.add('done'); }, stepTimes[i-1]+700);
+  }
+}
+
+function setStep(n) {
+  for (let i=1; i<=5; i++) {
+    document.getElementById(`sp${i}`).className = i<n ? 'spin-step done' : i===n ? 'spin-step active' : 'spin-step';
+  }
+}
+
+async function fetchWithTimeout(url, ms) {
+  const ctrl = new AbortController();
+  const id = setTimeout(() => ctrl.abort(), ms);
+  try {
+    const r = await fetch(url, { signal: ctrl.signal });
+    clearTimeout(id);
+    return r;
+  } catch(e) {
+    clearTimeout(id);
+    throw e;
+  }
+}
+
+function calcDist(lat1, lng1, lat2, lng2) {
+  const R = 6371;
+  const dLat = (lat2-lat1)*Math.PI/180;
+  const dLng = (lng2-lng1)*Math.PI/180;
+  const a = Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLng/2)**2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+}
+
+// ─────────────────────────────────────
+//  INIT
+// ─────────────────────────────────────
+document.getElementById('searchInput').addEventListener('keydown', e => {
+  if (e.key === 'Enter') doSearch();
+});
+
+initMap();
+detectLocation();
+</script>
+
+</body>
+</html>
